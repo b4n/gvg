@@ -211,25 +211,41 @@ read_xml_pipe (GvgChildData  *cdata,
 }
 
 static void
+cleanup_child (GvgChildData  *cdata,
+               gboolean       kill_it)
+{
+  if (cdata->pid != INVALID_PID) {
+    if (kill_it) {
+      terminate_child (cdata->pid);
+    }
+    g_spawn_close_pid (cdata->pid);
+    cdata->pid = INVALID_PID;
+  }
+}
+
+static void
+cleanup_pipe (GvgChildData *cdata)
+{
+  /* make sure we read everything up to now */
+  if (cdata->pipe_source) {
+    g_source_destroy (cdata->pipe_source);
+    cdata->pipe_source = NULL;
+  }
+  if (cdata->pipe_channel) {
+    read_xml_pipe (cdata, TRUE);
+    g_io_channel_shutdown (cdata->pipe_channel, TRUE, NULL);
+    g_io_channel_unref (cdata->pipe_channel);
+    cdata->pipe_channel = NULL;
+  }
+  close_and_invalidate (&cdata->xml_pipe);
+}
+
+static void
 gvg_child_data_unref (GvgChildData *cdata)
 {
   if (g_atomic_int_dec_and_test (&cdata->ref_count)) {
-    if (cdata->pid != INVALID_PID) {
-      terminate_child (cdata->pid);
-      g_spawn_close_pid (cdata->pid);
-      cdata->pid = INVALID_PID;
-    }
-    read_xml_pipe (cdata, TRUE);
-    if (cdata->pipe_channel) {
-      g_io_channel_shutdown (cdata->pipe_channel, TRUE, NULL);
-      g_io_channel_unref (cdata->pipe_channel);
-      cdata->pipe_channel = NULL;
-    }
-    if (cdata->pipe_source) {
-      g_source_destroy (cdata->pipe_source);
-      cdata->pipe_source = NULL;
-    }
-    close_and_invalidate (&cdata->xml_pipe);
+    cleanup_child (cdata, TRUE);
+    cleanup_pipe (cdata);
     if (cdata->parser) {
       /* ensure the parser terminated */
       gvg_xml_parser_push (cdata->parser, NULL, 0, TRUE);
@@ -259,6 +275,7 @@ xml_fd_in_ready (GIOChannel  *channel,
   
   if (! keep) {
     g_debug ("removing pipe watch");
+    cleanup_pipe (cdata);
   }
   return keep;
 }
@@ -271,8 +288,7 @@ watch_child (GPid     pid,
   GvgChildData *cdata = data;
   
   g_debug ("child terminated");
-  g_spawn_close_pid (pid);
-  cdata->pid = INVALID_PID;
+  cleanup_child (cdata, FALSE);
 }
 
 static gchar **
