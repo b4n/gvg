@@ -16,6 +16,11 @@ LT_PREREQ([2.2.0])
 LT_INIT
 AC_PROG_CC
 
+AC_PATH_PROG([GLIB_MKENUMS], [glib-mkenums], [no])
+AC_SUBST([GLIB_MKENUMS])
+AS_IF([test "x$GLIB_MKENUMS" = "xno"],
+      [AC_MSG_ERROR([glib-mkenums not found, are GLib dev tools installed?])])
+
 # Checks for libraries.
 PKG_CHECK_MODULES([GVG], [glib-2.0 >= 2.16
                           gio-2.0

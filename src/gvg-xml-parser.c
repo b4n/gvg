@@ -33,87 +33,140 @@
 #include "gvg-xml-parser.h"
 
 #include <glib.h>
+#include <glib-object.h>
 #include <libxml/parser.h>
+#include <string.h>
 
 
-struct _GvgXmlParser {
+struct _GvgXmlParserPrivate {
   xmlSAXHandler           saxh;
   xmlParserCtxtPtr        ctxt;
   
   GString                *content;
   GString                *path;
   guint                   depth;
-  
-  GvgXmlStartElementFunc  user_start_element_func;
-  GvgXmlEndElementFunc    user_end_element_func;
-  gpointer                user_data;
-  GDestroyNotify          user_data_notify;
 };
 
 
+static void     gvg_xml_parser_finalize               (GObject *object);
+static void     gvg_xml_parser_characters_handler     (void           *data,
+                                                       const xmlChar  *chs,
+                                                       int             len);
+static void     gvg_xml_parser_end_element_handler    (void          *data,
+                                                       const xmlChar *name);
+static void     gvg_xml_parser_start_element_hanlder  (void            *data,
+                                                       const xmlChar   *name,
+                                                       const xmlChar  **atts);
+
+
+G_DEFINE_ABSTRACT_TYPE (GvgXmlParser,
+                        gvg_xml_parser,
+                        G_TYPE_OBJECT)
 
 
 static void
-parser_path_push (GvgXmlParser *parser,
-                  const gchar  *element)
+gvg_xml_parser_class_init (GvgXmlParserClass *klass)
 {
-  g_string_append_c (parser->path, '/');
-  g_string_append (parser->path, element);
-  parser->depth ++;
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->finalize = gvg_xml_parser_finalize;
+
+  g_type_class_add_private (klass, sizeof (GvgXmlParserPrivate));
 }
 
 static void
-parser_path_pop (GvgXmlParser *parser)
+gvg_xml_parser_init (GvgXmlParser *self)
+{
+  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GVG_TYPE_XML_PARSER,
+                                            GvgXmlParserPrivate);
+  
+  self->priv->ctxt              = NULL;
+  memset (&self->priv->saxh, 0, sizeof self->priv->saxh);
+  self->priv->saxh.startElement = gvg_xml_parser_start_element_hanlder;
+  self->priv->saxh.endElement   = gvg_xml_parser_end_element_handler;
+  self->priv->saxh.characters   = gvg_xml_parser_characters_handler;
+  self->priv->path              = g_string_new (NULL);
+  self->priv->content           = g_string_new (NULL);
+  self->priv->depth             = 0;
+}
+
+static void
+gvg_xml_parser_finalize (GObject *object)
+{
+  GvgXmlParser *self = GVG_XML_PARSER (object);
+  
+  if (self->priv->ctxt) {
+    xmlFreeDoc (self->priv->ctxt->myDoc);
+    xmlFreeParserCtxt (self->priv->ctxt);
+  }
+  g_string_free (self->priv->content, TRUE);
+  g_string_free (self->priv->path, TRUE);
+  
+  G_OBJECT_CLASS (gvg_xml_parser_parent_class)->finalize (object);
+}
+
+static void
+parser_path_push (GvgXmlParser *self,
+                  const gchar  *element)
+{
+  g_string_append_c (self->priv->path, '/');
+  g_string_append (self->priv->path, element);
+  self->priv->depth ++;
+}
+
+static void
+parser_path_pop (GvgXmlParser *self)
 {
   gsize i;
   
-  if (parser->path->len == 0) {
-    return;
-  }
+  g_return_if_fail (self->priv->path->len > 0);
   
-  parser->depth--;
-  for (i = parser->path->len; i-- > 0; ) {
-    if (parser->path->str[i] == '/') {
-      g_string_truncate (parser->path, i);
+  self->priv->depth--;
+  for (i = self->priv->path->len; i-- > 0; ) {
+    if (self->priv->path->str[i] == '/') {
+      g_string_truncate (self->priv->path, i);
       break;
     }
   }
 }
-
 
 static void
 gvg_xml_parser_start_element_hanlder (void            *data,
                                       const xmlChar   *name,
                                       const xmlChar  **atts)
 {
-  GvgXmlParser *parser = data;
+  GvgXmlParser       *self  = data;
+  GvgXmlParserClass  *klass = GVG_XML_PARSER_GET_CLASS (self);
   
-  parser_path_push (parser, (const gchar *) name);
-  //~ g_debug ("start element %s", parser->path->str);
+  parser_path_push (self, (const gchar *) name);
+  //~ g_debug ("start element %s", self->priv->path->str);
   
-  if (parser->user_start_element_func) {
-    parser->user_start_element_func ((const gchar *) name,
-                                     (const gchar **) atts,
-                                     parser->path->str,
-                                     parser->user_data);
+  if (klass->element_start) {
+    klass->element_start (self,
+                          (const gchar *) name,
+                          (const gchar **) atts,
+                          self->priv->path->str);
   }
-  g_string_truncate (parser->content, 0);
+  g_string_truncate (self->priv->content, 0);
 }
 
 static void
 gvg_xml_parser_end_element_handler (void          *data,
                                     const xmlChar *name)
 {
-  GvgXmlParser *parser = data;
+  GvgXmlParser       *self  = data;
+  GvgXmlParserClass  *klass = GVG_XML_PARSER_GET_CLASS (self);
   
-  //~ g_debug ("end element %s", parser->path->str);
-  if (parser->user_end_element_func) {
-    parser->user_end_element_func ((const gchar *) name, parser->content->str,
-                                   parser->path->str, parser->user_data);
+  //~ g_debug ("end element %s", self->priv->path->str);
+  if (klass->element_end) {
+    klass->element_end (self,
+                        (const gchar *) name,
+                        self->priv->content->str,
+                        self->priv->path->str);
   }
-  parser_path_pop (parser);
+  parser_path_pop (self);
   
-  g_string_truncate (parser->content, 0);
+  g_string_truncate (self->priv->content, 0);
 }
 
 static void
@@ -121,77 +174,35 @@ gvg_xml_parser_characters_handler (void           *data,
                                    const xmlChar  *chs,
                                    int             len)
 {
-  GvgXmlParser *parser = data;
+  GvgXmlParser *self = data;
   
-  g_string_append_len (parser->content, (const gchar *) chs, len);
-}
-
-GvgXmlParser *
-gvg_xml_parser_new (GvgXmlStartElementFunc  start_element_func,
-                    GvgXmlEndElementFunc    end_element_func,
-                    gpointer                data,
-                    GDestroyNotify          data_notify)
-{
-  GvgXmlParser *parser;
-  
-  parser = g_malloc0 (sizeof *parser);
-  parser->ctxt                    = NULL;
-  parser->saxh.startElement       = gvg_xml_parser_start_element_hanlder;
-  parser->saxh.endElement         = gvg_xml_parser_end_element_handler;
-  parser->saxh.characters         = gvg_xml_parser_characters_handler;
-  parser->path                    = g_string_new (NULL);
-  parser->content                 = g_string_new (NULL);
-  parser->depth                   = 0;
-  /* user funcs */
-  parser->user_start_element_func = start_element_func;
-  parser->user_end_element_func   = end_element_func;
-  parser->user_data               = data;
-  parser->user_data_notify        = data_notify;
-  
-  return parser;
-}
-
-void
-gvg_xml_parser_free (GvgXmlParser *parser)
-{
-  g_return_if_fail (parser != NULL);
-  
-  if (parser->user_data_notify) {
-    parser->user_data_notify (parser->user_data);
-  }
-  
-  if (parser->ctxt) {
-    xmlFreeDoc (parser->ctxt->myDoc);
-    xmlFreeParserCtxt (parser->ctxt);
-  }
-  g_string_free (parser->content, TRUE);
-  g_string_free (parser->path, TRUE);
-  g_free (parser);
+  g_string_append_len (self->priv->content, (const gchar *) chs, len);
 }
 
 gboolean
-gvg_xml_parser_push (GvgXmlParser  *parser,
+gvg_xml_parser_push (GvgXmlParser  *self,
                      const gchar   *data,
                      gsize          len,
                      gboolean       end)
 {
-  g_return_val_if_fail (parser != NULL, FALSE);
+  g_return_val_if_fail (GVG_IS_XML_PARSER (self), FALSE);
   g_return_val_if_fail (len <= G_MAXINT, FALSE);
   
   //~ g_debug ("got data");
-  if (! parser->ctxt) {
-    parser->ctxt = xmlCreatePushParserCtxt (&parser->saxh, parser,
-                                            data, (gint) len, NULL);
+  /*fwrite (data, 1, len, stderr);*/
+  if (! self->priv->ctxt) {
+    self->priv->ctxt = xmlCreatePushParserCtxt (&self->priv->saxh, self,
+                                                data, (gint) len, NULL);
     if (end) {
-      xmlParseChunk (parser->ctxt, NULL, 0, end);
+      xmlParseChunk (self->priv->ctxt, NULL, 0, end);
     }
   } else {
-    xmlParseChunk (parser->ctxt, data, (gint) len, end);
+    xmlParseChunk (self->priv->ctxt, data, (gint) len, end);
   }
   
-  if (! parser->ctxt->wellFormed) {
+  if (! self->priv->ctxt->wellFormed) {
     g_warning ("malformed XML");
   }
   
-  return parser->ctxt->wellFormed;
+  return self->priv->ctxt->wellFormed;
 }

@@ -23,15 +23,7 @@
 #include <gtk/gtk.h>
 
 #include "gvg-memcheck.h"
-
-enum {
-  COL_DISPLAY,
-  COL_IP,
-  COL_DIR,
-  COL_FILE,
-  COL_LINE,
-  N_COLS
-};
+#include "gvg-memcheck-store.h"
 
 
 static gboolean
@@ -61,7 +53,9 @@ view_row_activated (GtkTreeView        *view,
     guint   line;
     
     gtk_tree_model_get (model, &iter,
-                        COL_DIR, &dir, COL_FILE, &file, COL_LINE, &line,
+                        GVG_MEMCHECK_STORE_COLUMN_DIR, &dir,
+                        GVG_MEMCHECK_STORE_COLUMN_FILE, &file,
+                        GVG_MEMCHECK_STORE_COLUMN_LINE, &line,
                         -1);
     if (! file) {
       if (gtk_tree_model_iter_has_child (model, &iter)) {
@@ -88,8 +82,8 @@ set_ip_data (GtkCellLayout   *cell_layout,
   guint64   ip;
   gchar    *text;
   
-  gtk_tree_model_get (tree_model, iter, COL_IP, &ip, -1);
-  text = ip > 0 ? g_strdup_printf ("%#x", (guint) ip) : NULL;
+  gtk_tree_model_get (tree_model, iter, GVG_MEMCHECK_STORE_COLUMN_IP, &ip, -1);
+  text = ip > 0 ? g_strdup_printf ("%#lx", (gulong) ip) : NULL;
   g_object_set (cell, "text", text, "visible", text != NULL, NULL);
   g_free (text);
 }
@@ -98,22 +92,16 @@ int
 main (int     argc,
       char  **argv)
 {
-  GvgMemcheckOptions  opts = GVG_MEMCHECK_OPTIONS_INIT;
   GtkWidget          *window;
   GtkWidget          *scroll;
   GtkWidget          *view;
   GtkTreeViewColumn  *col;
   GtkCellRenderer    *cell;
-  GtkTreeStore       *store;
+  GvgMemcheckStore   *store;
   
   gtk_init (&argc, &argv);
   
-  store = gtk_tree_store_new (N_COLS,
-                              G_TYPE_STRING,
-                              G_TYPE_UINT64,
-                              G_TYPE_STRING,
-                              G_TYPE_STRING,
-                              G_TYPE_UINT);
+  store = gvg_memcheck_store_new ();
   
   window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   g_signal_connect (window, "destroy", gtk_main_quit, NULL);
@@ -134,7 +122,8 @@ main (int     argc,
   /* label column */
   cell = gtk_cell_renderer_text_new ();
   col = gtk_tree_view_column_new_with_attributes ("Error", cell,
-                                                  "text", COL_DISPLAY, NULL);
+                                                  "text", GVG_MEMCHECK_STORE_COLUMN_LABEL,
+                                                  NULL);
   gtk_tree_view_append_column (GTK_TREE_VIEW (view), col);
   /* frame IP column */
   cell = g_object_new (GTK_TYPE_CELL_RENDERER_TEXT, /*"font", "monospace",*/ NULL);
@@ -145,13 +134,21 @@ main (int     argc,
   gtk_tree_view_append_column (GTK_TREE_VIEW (view), col);
   
   if (argc > 1) {
+    GvgMemcheck        *memcheck;
+    GvgMemcheckOptions *options;
+    GvgMemcheckParser  *parser;
     GError *err = NULL;
     
-    if (! gvg_memcheck ((const gchar **) &argv[1], &opts, store, &err)) {
+    options = gvg_memcheck_options_new ();
+    parser = gvg_memcheck_parser_new (store);
+    memcheck = gvg_memcheck_new (options, parser);
+    g_object_unref (parser);
+    if (! gvg_run (GVG (memcheck), (const gchar **) &argv[1], &err)) {
       g_warning ("failed to run memcheck: %s", err->message);
       g_error_free (err);
       return 1;
     }
+    /*g_object_unref (memcheck);*/
   }
   
   gtk_widget_show_all (window);

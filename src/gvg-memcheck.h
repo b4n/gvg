@@ -23,12 +23,22 @@
 #define H_GVG_MEMCHECK
 
 #include <glib.h>
+#include <glib-object.h>
 #include <gtk/gtk.h>
 
 #include "gvg.h"
-#include "gvg-args-builder.h"
+#include "gvg-memcheck-parser.h"
+#include "gvg-memcheck-options.h"
 
 G_BEGIN_DECLS
+
+
+#define GVG_TYPE_MEMCHECK             (gvg_memcheck_get_type ())
+#define GVG_MEMCHECK(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), GVG_TYPE_MEMCHECK, GvgMemcheck))
+#define GVG_MEMCHECK_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST ((klass),  GVG_TYPE_MEMCHECK, GvgMemcheckClass))
+#define GVG_IS_MEMCHECK(obj)          (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GVG_TYPE_MEMCHECK))
+#define GVG_IS_MEMCHECK_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE ((klass),  GVG_TYPE_MEMCHECK))
+#define GVG_MEMCHECK_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj),  GVG_TYPE_MEMCHECK, GvgMemcheckClass))
 
 
 typedef enum {
@@ -40,65 +50,28 @@ typedef enum {
 
 typedef enum {
   GVG_MEMCHECK_LEAK_RESOLUTION_LOW,
-  GVG_MEMCHECK_LEAK_RESOLUTION_MEDIUM,
+  GVG_MEMCHECK_LEAK_RESOLUTION_MED,
   GVG_MEMCHECK_LEAK_RESOLUTION_HIGH
 } GvgMemcheckLeakResolutionMode;
 
-typedef enum {
-  GVG_ERROR_KIND_UNINIT_VALUE,
-  GVG_ERROR_KIND_UNINIT_CONDITION,
-  GVG_ERROR_KIND_INVALID_READ,
-  GVG_ERROR_KIND_LEAK_POSSIBLY_LOST,
-  GVG_ERROR_KIND_LEAK_DEFINITELY_LOST
-  /* ... */
-} GvgMemcheckErrorKind;
 
-typedef struct _GvgMemcheckOptions  GvgMemcheckOptions;
+typedef struct _GvgMemcheck         GvgMemcheck;
+typedef struct _GvgMemcheckClass    GvgMemcheckClass;
 
-struct _GvgMemcheckOptions {
-  GvgOptions parent;
-  
-  GvgMemcheckLeakCheckMode      leak_check;
-  GvgMemcheckLeakResolutionMode leak_resolution;
-  gssize                        freelist_vol; /* -1 means default */
-  gint                          malloc_fill; /* -1 means none */
-  gint                          free_fill; /* -1 means none */
-  guint                         show_possibly_lost      : 1;
-  guint                         show_reachable          : 1;
-  guint                         undef_value_errors      : 1;
-  guint                         track_origins           : 1;
-  guint                         partial_loads_ok        : 1;
-  guint                         workaround_gcc296_bugs  : 1;
-  /* gsize ingore_ranges[] */
+struct _GvgMemcheck
+{
+  Gvg parent;
 };
 
-#define GVG_MEMCHECK_OPTIONS_INIT {                           \
-    GVG_OPTIONS_INIT, /* parent GvgOptions */                 \
-                                                              \
-    GVG_MEMCHECK_LEAK_CHECK_SUMMARY,    /* leak check */      \
-    GVG_MEMCHECK_LEAK_RESOLUTION_HIGH,  /* leak resolution */ \
-    -1, /* freelist vol */                                    \
-    -1, /* malloc fill */                                     \
-    -1, /* free fill */                                       \
-    TRUE, /* show possibly lost */                            \
-    FALSE, /* show reachable */                               \
-    TRUE, /* undef value errors */                            \
-    FALSE, /* track origins */                                \
-    FALSE, /* partial loads ok */                             \
-    FALSE, /* workaround gcc296 bugs */                       \
-  }
+struct _GvgMemcheckClass
+{
+  GvgClass parent_class;
+};
 
 
-const gchar          *gvg_memcheck_leak_check_mode_to_string      (GvgMemcheckLeakCheckMode mode);
-const gchar          *gvg_memcheck_leak_resolution_mode_to_string (GvgMemcheckLeakResolutionMode mode);
-const gchar          *gvg_memcheck_error_kind_to_string           (GvgMemcheckErrorKind kind);
-GvgMemcheckErrorKind  gvg_memcheck_error_kind_from_string         (const gchar *str);
-void                  gvg_memcheck_add_options                    (GvgArgsBuilder            *args,
-                                                                   const GvgMemcheckOptions  *opts);
-gboolean              gvg_memcheck                                (const gchar              **program_argv,
-                                                                   const GvgMemcheckOptions  *options,
-                                                                   GtkTreeStore              *store,
-                                                                   GError                   **error);
+GType               gvg_memcheck_get_type       (void) G_GNUC_CONST;
+GvgMemcheck        *gvg_memcheck_new            (GvgMemcheckOptions *options,
+                                                 GvgMemcheckParser  *parser);
 
 
 G_END_DECLS

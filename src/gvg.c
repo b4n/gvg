@@ -22,6 +22,7 @@
 #include "gvg.h"
 
 #include <glib.h>
+#include <glib-object.h>
 #include <gio/gio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -32,20 +33,165 @@
 
 #include "gvg-xml-parser.h"
 #include "gvg-args-builder.h"
+#include "gvg-options.h"
 
 
-void
-gvg_add_options (GvgArgsBuilder    *args,
-                 const GvgOptions  *opts)
+#ifdef G_OS_WIN32
+# define INVALID_PID NULL
+#else
+# define INVALID_PID -1
+#endif
+
+
+struct _GvgPrivate
 {
-  gvg_args_builder_add_bool (args, "demangle", opts->demangle);
-  gvg_args_builder_add_bool (args, "error-limit", opts->error_limit);
-  gvg_args_builder_add_bool (args, "show-below-main", opts->show_below_main);
-  gvg_args_builder_add_bool (args, "track-fds", opts->track_fds);
-  gvg_args_builder_add_bool (args, "time-stamp", opts->time_stamp);
-  gvg_args_builder_add_uint (args, "num-callers", opts->num_callers);
-  gvg_args_builder_add_ssize_checked (args, "max-stackframe", opts->max_stackframe);
-  gvg_args_builder_add_ssize_checked (args, "main-stacksize", opts->main_stacksize);
+  GPid          pid;
+  gint          xml_pipe;
+  GSource      *pipe_source;
+  GIOChannel   *pipe_channel;
+  
+  GvgXmlParser *parser;
+  GvgOptions   *options;
+};
+
+
+G_DEFINE_ABSTRACT_TYPE (Gvg,
+                        gvg,
+                        G_TYPE_OBJECT)
+
+
+static void     gvg_finalize        (GObject *object);
+static void     gvg_get_property    (GObject    *object,
+                                     guint       prop_id,
+                                     GValue     *value,
+                                     GParamSpec *pspec);
+static void     gvg_set_property    (GObject      *object,
+                                     guint         prop_id,
+                                     const GValue *value,
+                                     GParamSpec   *pspec);
+
+static void     cleanup_child       (Gvg     *self,
+                                     gboolean kill_it);
+static void     cleanup_pipe        (Gvg *self);
+
+
+
+enum
+{
+  PROP_0,
+  PROP_PARSER,
+  PROP_OPTIONS
+};
+
+
+static void
+gvg_class_init (GvgClass *klass)
+{
+  GObjectClass *object_class  = G_OBJECT_CLASS (klass);
+  
+  object_class->finalize      = gvg_finalize;
+  object_class->set_property  = gvg_set_property;
+  object_class->get_property  = gvg_get_property;
+  
+  g_object_class_install_property (object_class,
+                                   PROP_PARSER,
+                                   g_param_spec_object ("parser",
+                                                        "Parser",
+                                                        "The XML parser for Valgrind's output",
+                                                        GVG_TYPE_XML_PARSER,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_STATIC_STRINGS |
+                                                        G_PARAM_CONSTRUCT_ONLY));
+  g_object_class_install_property (object_class,
+                                   PROP_OPTIONS,
+                                   g_param_spec_object ("options",
+                                                        "Options",
+                                                        "The Valgrind options",
+                                                        GVG_TYPE_OPTIONS,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_STATIC_STRINGS |
+                                                        G_PARAM_CONSTRUCT_ONLY));
+    
+  g_type_class_add_private (klass, sizeof (GvgPrivate));
+}
+
+static void
+gvg_init (Gvg *self)
+{
+  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GVG_TYPE_GVG, GvgPrivate);
+  
+  self->priv->pid           = INVALID_PID;
+  self->priv->xml_pipe      = -1;
+  self->priv->pipe_source   = NULL;
+  self->priv->pipe_channel  = NULL;
+  self->priv->parser        = NULL;
+}
+
+static void
+gvg_finalize (GObject *object)
+{
+  Gvg *self = GVG (object);
+  
+  cleanup_child (self, TRUE);
+  cleanup_pipe (self);
+  if (self->priv->parser) {
+    /* ensure the parser terminated */
+    gvg_xml_parser_push (self->priv->parser, NULL, 0, TRUE);
+    g_object_unref (self->priv->parser);
+    self->priv->parser = NULL;
+  }
+  
+  G_OBJECT_CLASS (gvg_parent_class)->finalize (object);
+}
+
+static void
+gvg_get_property (GObject    *object,
+                  guint       prop_id,
+                  GValue     *value,
+                  GParamSpec *pspec)
+{
+  Gvg *self = GVG (object);
+  
+  switch (prop_id) {
+    case PROP_PARSER:
+      g_value_set_object (value, self->priv->parser);
+      break;
+    
+    case PROP_OPTIONS:
+      g_value_set_object (value, self->priv->options);
+      break;
+    
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+  }
+}
+
+static void
+gvg_set_property (GObject      *object,
+                  guint         prop_id,
+                  const GValue *value,
+                  GParamSpec   *pspec)
+{
+  Gvg *self = GVG (object);
+  
+  switch (prop_id) {
+    case PROP_PARSER:
+      if (self->priv->parser) {
+        g_object_unref (self->priv->parser);
+      }
+      self->priv->parser = g_value_dup_object (value);
+      break;
+    
+    case PROP_OPTIONS:
+      if (self->priv->options) {
+        g_object_unref (self->priv->options);
+      }
+      self->priv->options = g_value_dup_object (value);
+      break;
+    
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+  }
 }
 
 static gint
@@ -60,48 +206,6 @@ close_and_invalidate (gint *fd)
   
   return ret;
 }
-
-typedef struct _GvgChildData GvgChildData;
-
-struct _GvgChildData {
-  gint        ref_count;
-  
-  GPid        pid;
-  gint        xml_pipe;
-  GSource    *pipe_source;
-  GIOChannel *pipe_channel;
-  
-  GvgXmlParser *parser;
-};
-
-static GvgChildData *
-gvg_child_data_new (void)
-{
-  GvgChildData *cdata;
-  
-  cdata = g_slice_alloc (sizeof *cdata);
-  cdata->ref_count    = 1;
-  cdata->pid          = -1;
-  cdata->xml_pipe     = -1;
-  cdata->pipe_source  = NULL;
-  cdata->pipe_channel = NULL;
-  cdata->parser       = NULL;
-  
-  return cdata;
-}
-
-static GvgChildData *
-gvg_child_data_ref (GvgChildData *cdata)
-{
-  g_atomic_int_inc (&cdata->ref_count);
-  return cdata;
-}
-
-#ifdef G_OS_WIN32
-# define INVALID_PID NULL
-#else
-# define INVALID_PID -1
-#endif
 
 /* terminates a process, giving it 5 seconds to terminate or kill it */
 static void
@@ -142,7 +246,9 @@ create_io_channel (gint fd)
 #else
   channel = g_io_channel_unix_new (fd);
 #endif
+  /* we don't want to either buffer or do any conversion */
   g_io_channel_set_encoding (channel, NULL, NULL);
+  g_io_channel_set_buffered (channel, FALSE);
   
   return channel;
 }
@@ -166,8 +272,8 @@ io_channel_poll (GIOChannel  *channel,
 }
 
 static gboolean
-read_xml_pipe (GvgChildData  *cdata,
-               gboolean       check)
+read_xml_pipe (Gvg     *self,
+               gboolean check)
 {
   gchar buf[BUFSIZ];
   gsize len;
@@ -179,7 +285,7 @@ read_xml_pipe (GvgChildData  *cdata,
     if (check) {
       gint ret;
       
-      ret = io_channel_poll (cdata->pipe_channel, G_IO_IN, 0);
+      ret = io_channel_poll (self->priv->pipe_channel, G_IO_IN, 0);
       if (ret < 0) {
         return FALSE;
       } else if (ret == 0) {
@@ -189,12 +295,12 @@ read_xml_pipe (GvgChildData  *cdata,
     
     do {
       len = 0u;
-      status = g_io_channel_read_chars (cdata->pipe_channel, buf, sizeof buf,
-                                        &len, NULL);
+      status = g_io_channel_read_chars (self->priv->pipe_channel,
+                                        buf, sizeof buf, &len, NULL);
     } while (status == G_IO_STATUS_AGAIN);
     
     if (status == G_IO_STATUS_NORMAL) {
-      gvg_xml_parser_push (cdata->parser, buf, len, FALSE);
+      gvg_xml_parser_push (self->priv->parser, buf, len, FALSE);
       if (len == sizeof (buf)) {
         /* if we read a whole packet, we'll try again but we also need to
          * ensure we didn't read *all* the data, so we need to poll() */
@@ -211,49 +317,33 @@ read_xml_pipe (GvgChildData  *cdata,
 }
 
 static void
-cleanup_child (GvgChildData  *cdata,
-               gboolean       kill_it)
+cleanup_child (Gvg     *self,
+               gboolean kill_it)
 {
-  if (cdata->pid != INVALID_PID) {
+  if (self->priv->pid != INVALID_PID) {
     if (kill_it) {
-      terminate_child (cdata->pid);
+      terminate_child (self->priv->pid);
     }
-    g_spawn_close_pid (cdata->pid);
-    cdata->pid = INVALID_PID;
+    g_spawn_close_pid (self->priv->pid);
+    self->priv->pid = INVALID_PID;
   }
 }
 
 static void
-cleanup_pipe (GvgChildData *cdata)
+cleanup_pipe (Gvg *self)
 {
   /* make sure we read everything up to now */
-  if (cdata->pipe_source) {
-    g_source_destroy (cdata->pipe_source);
-    cdata->pipe_source = NULL;
+  if (self->priv->pipe_source) {
+    g_source_destroy (self->priv->pipe_source);
+    self->priv->pipe_source = NULL;
   }
-  if (cdata->pipe_channel) {
-    read_xml_pipe (cdata, TRUE);
-    g_io_channel_shutdown (cdata->pipe_channel, TRUE, NULL);
-    g_io_channel_unref (cdata->pipe_channel);
-    cdata->pipe_channel = NULL;
+  if (self->priv->pipe_channel) {
+    read_xml_pipe (self, TRUE);
+    g_io_channel_shutdown (self->priv->pipe_channel, TRUE, NULL);
+    g_io_channel_unref (self->priv->pipe_channel);
+    self->priv->pipe_channel = NULL;
   }
-  close_and_invalidate (&cdata->xml_pipe);
-}
-
-static void
-gvg_child_data_unref (GvgChildData *cdata)
-{
-  if (g_atomic_int_dec_and_test (&cdata->ref_count)) {
-    cleanup_child (cdata, TRUE);
-    cleanup_pipe (cdata);
-    if (cdata->parser) {
-      /* ensure the parser terminated */
-      gvg_xml_parser_push (cdata->parser, NULL, 0, TRUE);
-      gvg_xml_parser_free (cdata->parser);
-    }
-    
-    g_slice_free1 (sizeof *cdata, cdata);
-  }
+  close_and_invalidate (&self->priv->xml_pipe);
 }
 
 static gboolean
@@ -261,13 +351,20 @@ xml_fd_in_ready (GIOChannel  *channel,
                  GIOCondition cond,
                  gpointer     data)
 {
-  GvgChildData *cdata = data;
-  gboolean      keep  = TRUE;
+  Gvg      *self = data;
+  gboolean  keep  = TRUE;
   
-  g_assert (cdata->pipe_channel == channel);
+  g_assert (self->priv->pipe_channel == channel);
+  
+  /*if (cond & G_IO_IN) g_debug ("in");
+  if (cond & G_IO_OUT) g_debug ("out");
+  if (cond & G_IO_PRI) g_debug ("pri");
+  if (cond & G_IO_ERR) g_debug ("err");
+  if (cond & G_IO_HUP) g_debug ("hup");
+  if (cond & G_IO_NVAL) g_debug ("nval");*/
   
   if (cond & (G_IO_IN | G_IO_PRI)) {
-    keep = read_xml_pipe (cdata, FALSE);
+    keep = read_xml_pipe (self, FALSE);
   }
   if (cond & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)) {
     keep = FALSE;
@@ -275,7 +372,7 @@ xml_fd_in_ready (GIOChannel  *channel,
   
   if (! keep) {
     g_debug ("removing pipe watch");
-    cleanup_pipe (cdata);
+    cleanup_pipe (self);
   }
   return keep;
 }
@@ -285,20 +382,18 @@ watch_child (GPid     pid,
              gint     status,
              gpointer data)
 {
-  GvgChildData *cdata = data;
+  Gvg *self = data;
   
   g_debug ("child terminated");
-  cleanup_child (cdata, FALSE);
+  cleanup_child (self, FALSE);
 }
 
 static gchar **
-build_argv (const gchar **program_argv,
-            gint          xml_fd,
-            void        (*get_args) (GvgArgsBuilder *builder,
-                                     gpointer        data),
-            gpointer      data)
+build_argv (Gvg          *self,
+            const gchar **program_argv,
+            gint          xml_fd)
 {
-  GvgArgsBuilder *args = gvg_args_builder_new ();
+  GvgArgsBuilder *args  = gvg_args_builder_new ();
   
   gvg_args_builder_add (args, "valgrind");
   /* FIXME: this options isn't supported by Valgrind < 3.6.1 */
@@ -310,11 +405,21 @@ build_argv (const gchar **program_argv,
    * manual man) */
   gvg_args_builder_add_string (args, "child-silent-after-fork", "yes");
   
-  get_args (args, data);
+  if (self->priv->options) {
+    gvg_options_to_args (self->priv->options, args);
+  }
   
   /* add program and NULL terminator */
   gvg_args_builder_add_args (args, program_argv);
   gvg_args_builder_add (args, NULL);
+  
+  /*{
+    guint i;
+    
+    for (i = 0; i < args->len; i++) {
+      g_debug ("args[%u] = %s", i, g_ptr_array_index (args, i));
+    }
+  }*/
   
   return gvg_args_builder_free (args, FALSE);
 }
@@ -337,23 +442,22 @@ make_pipe (gint     p[2],
 }
 
 gboolean
-gvg (const gchar          **program_argv,
-     GvgGetArgsFunc         get_args,
-     gpointer               get_args_data,
-     GvgXmlStartElementFunc xml_start_element_func,
-     GvgXmlEndElementFunc   xml_end_element_func,
-     gpointer               xml_data,
-     GDestroyNotify         xml_data_destroy,
-     GError               **error)
+gvg_run (Gvg           *self,
+         const gchar  **program_argv,
+         GError       **error)
 {
   gboolean  success     = FALSE;
   gint      xml_pipe[2] = { -1, -1 };
+  
+  g_return_val_if_fail (GVG_IS_GVG (self), FALSE);
+  g_return_val_if_fail (self->priv->parser != NULL, FALSE);
+  g_return_val_if_fail (! gvg_is_busy (self), FALSE);
   
   if (make_pipe (xml_pipe, error)) {
     GPid    pid;
     gchar **argv;
     
-    argv = build_argv (program_argv, xml_pipe[1], get_args, get_args_data);
+    argv = build_argv (self, program_argv, xml_pipe[1]);
     if (! g_spawn_async_with_pipes (NULL, argv, NULL,
                                     G_SPAWN_CHILD_INHERITS_STDIN |
                                     G_SPAWN_DO_NOT_REAP_CHILD |
@@ -363,29 +467,19 @@ gvg (const gchar          **program_argv,
                                     error)) {
       close_and_invalidate (&xml_pipe[0]);
     } else {
-      GvgChildData *cdata;
-      
-      cdata = gvg_child_data_new ();
-      cdata->pid = pid;
-      cdata->parser = gvg_xml_parser_new (xml_start_element_func,
-                                          xml_end_element_func,
-                                          xml_data, xml_data_destroy);
-      
-      g_child_watch_add_full (G_PRIORITY_DEFAULT, cdata->pid, watch_child,
-                              gvg_child_data_ref (cdata),
-                              (GDestroyNotify) gvg_child_data_unref);
+      self->priv->pid = pid;
+      g_child_watch_add_full (G_PRIORITY_DEFAULT, self->priv->pid, watch_child,
+                              self, NULL);
       /* pipe channel watch */
-      cdata->xml_pipe = xml_pipe[0];
-      cdata->pipe_channel = create_io_channel (cdata->xml_pipe);
-      cdata->pipe_source = g_io_create_watch (cdata->pipe_channel,
-                                              G_IO_IN | G_IO_PRI |
-                                              G_IO_ERR | G_IO_HUP);
-      g_source_set_callback (cdata->pipe_source, (GSourceFunc) xml_fd_in_ready,
-                             gvg_child_data_ref (cdata),
-                             (GDestroyNotify) gvg_child_data_unref);
-      g_source_attach (cdata->pipe_source, NULL);
+      self->priv->xml_pipe = xml_pipe[0];
+      self->priv->pipe_channel = create_io_channel (self->priv->xml_pipe);
+      self->priv->pipe_source = g_io_create_watch (self->priv->pipe_channel,
+                                                   G_IO_IN | G_IO_PRI |
+                                                   G_IO_ERR | G_IO_HUP);
+      g_source_set_callback (self->priv->pipe_source,
+                             (GSourceFunc) xml_fd_in_ready, self, NULL);
+      g_source_attach (self->priv->pipe_source, NULL);
       
-      gvg_child_data_unref (cdata);
       success = TRUE;
     }
     close_and_invalidate (&xml_pipe[1]);
@@ -393,4 +487,12 @@ gvg (const gchar          **program_argv,
   }
   
   return success;
+}
+
+gboolean
+gvg_is_busy (Gvg *self)
+{
+  g_return_val_if_fail (GVG_IS_GVG (self), FALSE);
+  
+  return self->priv->pid != INVALID_PID || self->priv->xml_pipe >= 0;
 }

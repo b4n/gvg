@@ -23,32 +23,49 @@
 #define H_GVG_XML_PARSER
 
 #include <glib.h>
+#include <glib-object.h>
 
 G_BEGIN_DECLS
 
 
-typedef struct _GvgXmlParser GvgXmlParser;
+#define GVG_TYPE_XML_PARSER             (gvg_xml_parser_get_type ())
+#define GVG_XML_PARSER(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), GVG_TYPE_XML_PARSER, GvgXmlParser))
+#define GVG_XML_PARSER_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST ((klass), GVG_TYPE_XML_PARSER, GvgXmlParserClass))
+#define GVG_IS_XML_PARSER(obj)          (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GVG_TYPE_XML_PARSER))
+#define GVG_IS_XML_PARSER_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE ((klass), GVG_TYPE_XML_PARSER))
+#define GVG_XML_PARSER_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), GVG_TYPE_XML_PARSER, GvgXmlParserClass))
 
 
-typedef void    (*GvgXmlStartElementFunc)   (const gchar   *name,
-                                             const gchar  **attrs,
-                                             const gchar   *path,
-                                             gpointer       data);
-typedef void    (*GvgXmlEndElementFunc)     (const gchar   *name,
-                                             const gchar   *content,
-                                             const gchar   *path,
-                                             gpointer       data);
+typedef struct _GvgXmlParser        GvgXmlParser;
+typedef struct _GvgXmlParserClass   GvgXmlParserClass;
+typedef struct _GvgXmlParserPrivate GvgXmlParserPrivate;
+
+struct _GvgXmlParser
+{
+  GObject parent;
+  GvgXmlParserPrivate *priv;
+};
+
+struct _GvgXmlParserClass
+{
+  GObjectClass  parent_class;
+  
+  void        (*element_start)    (GvgXmlParser  *self,
+                                   const gchar   *name,
+                                   const gchar  **attrs,
+                                   const gchar   *path);
+  void        (*element_end)      (GvgXmlParser  *self,
+                                   const gchar   *name,
+                                   const gchar   *content,
+                                   const gchar   *path);
+};
 
 
-GvgXmlParser   *gvg_xml_parser_new  (GvgXmlStartElementFunc start_element_func,
-                                     GvgXmlEndElementFunc   end_element_func,
-                                     gpointer               data,
-                                     GDestroyNotify         data_notify);
-void            gvg_xml_parser_free (GvgXmlParser  *parser);
-gboolean        gvg_xml_parser_push (GvgXmlParser  *parser,
-                                     const gchar   *data,
-                                     gsize          len,
-                                     gboolean       end);
+GType           gvg_xml_parser_get_type     (void) G_GNUC_CONST;
+gboolean        gvg_xml_parser_push         (GvgXmlParser  *parser,
+                                             const gchar   *data,
+                                             gsize          len,
+                                             gboolean       end);
 
 
 G_END_DECLS

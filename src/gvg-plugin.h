@@ -19,37 +19,17 @@
  * 
  */
 
-#include "gvg-memcheck.h"
+#ifndef H_GVG_PLUGIN
+#define H_GVG_PLUGIN
 
 #include <glib.h>
-#include <glib-object.h>
 
-#include "gvg.h"
-#include "gvg-memcheck-parser.h"
-#include "gvg-memcheck-options.h"
+G_BEGIN_DECLS
 
 
-G_DEFINE_TYPE (GvgMemcheck,
-               gvg_memcheck,
-               GVG_TYPE_GVG)
 
 
-static void
-gvg_memcheck_class_init (GvgMemcheckClass *klass)
-{
-}
 
-static void
-gvg_memcheck_init (GvgMemcheck *self)
-{
-}
+G_END_DECLS
 
-GvgMemcheck *
-gvg_memcheck_new (GvgMemcheckOptions *options,
-                  GvgMemcheckParser  *parser)
-{
-  return g_object_new (GVG_TYPE_MEMCHECK,
-                       "options", options,
-                       "parser", parser,
-                       NULL);
-}
+#endif /* guard */

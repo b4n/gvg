@@ -23,53 +23,44 @@
 #define H_GVG
 
 #include <glib.h>
+#include <glib-object.h>
 
 #include "gvg-xml-parser.h"
+#include "gvg-options.h"
 #include "gvg-args-builder.h"
 
 G_BEGIN_DECLS
 
 
-typedef struct _GvgOptions  GvgOptions;
+#define GVG_TYPE_GVG            (gvg_get_type ())
+#define GVG(obj)                (G_TYPE_CHECK_INSTANCE_CAST ((obj), GVG_TYPE_GVG, Gvg))
+#define GVG_CLASS(klass)        (G_TYPE_CHECK_CLASS_CAST ((klass),  GVG_TYPE_GVG, GvgClass))
+#define GVG_IS_GVG(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GVG_TYPE_GVG))
+#define GVG_IS_GVG_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass),  GVG_TYPE_GVG))
+#define GVG_GET_CLASS(obj)      (G_TYPE_INSTANCE_GET_CLASS ((obj),  GVG_TYPE_GVG, GvgClass))
 
-struct _GvgOptions {
-  guint   demangle        : 1;
-  guint   error_limit     : 1;
-  guint   show_below_main : 1;
-  guint   track_fds       : 1;
-  guint   time_stamp      : 1;
-  
-  guint   num_callers;
-  gssize  max_stackframe; /* -1 means default */
-  gssize  main_stacksize; /* -1 means default */
+
+typedef struct _Gvg         Gvg;
+typedef struct _GvgClass    GvgClass;
+typedef struct _GvgPrivate  GvgPrivate;
+
+struct _Gvg
+{
+  GObject     parent;
+  GvgPrivate *priv;
 };
 
-/** default initializer for GvgOptions */
-#define GVG_OPTIONS_INIT {        \
-    TRUE,   /* demangle */        \
-    TRUE,   /* error limit */     \
-    FALSE,  /* show below main */ \
-    FALSE,  /* track fds */       \
-    FALSE,  /* time stamp */      \
-    12,     /* num callers */     \
-    -1,     /* max stackframe */  \
-    -1,     /* main-stacksize */  \
-  }
+struct _GvgClass
+{
+  GObjectClass parent_class;
+};
 
 
-typedef void    (*GvgGetArgsFunc)       (GvgArgsBuilder  *bld,
-                                         gpointer         data);
-
-void          gvg_add_options       (GvgArgsBuilder        *args,
-                                     const GvgOptions      *opts);
-gboolean      gvg                   (const gchar          **program_argv,
-                                     GvgGetArgsFunc         get_args,
-                                     gpointer               get_args_data,
-                                     GvgXmlStartElementFunc xml_start_tag_func,
-                                     GvgXmlEndElementFunc   xml_end_tag_func,
-                                     gpointer               xml_data,
-                                     GDestroyNotify         xml_data_destroy,
-                                     GError               **error);
+GType         gvg_get_type          (void) G_GNUC_CONST;
+gboolean      gvg_run               (Gvg           *self,
+                                     const gchar  **program_argv,
+                                     GError       **error);
+gboolean      gvg_is_busy           (Gvg *self);
 
 
 G_END_DECLS
