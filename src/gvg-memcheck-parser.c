@@ -235,6 +235,41 @@ get_frame_display (GvgMemcheckFrame  *frame,
   return g_string_free (str, FALSE);
 }
 
+static GvgMemcheckErrorKind
+parse_kind (const gchar *str)
+{
+  struct {
+    const gchar          *name;
+    GvgMemcheckErrorKind  kind;
+  } kinds[] = {
+    { "InvalidFree",          GVG_MEMCHECK_ERROR_KIND_INVALID_FREE },
+    { "MismatchedFree",       GVG_MEMCHECK_ERROR_KIND_MISMATCHED_FREE },
+    { "InvalidRead",          GVG_MEMCHECK_ERROR_KIND_INVALID_READ },
+    { "InvalidWrite",         GVG_MEMCHECK_ERROR_KIND_INVALID_WRITE },
+    { "InvalidJump",          GVG_MEMCHECK_ERROR_KIND_INVALID_JUMP },
+    { "Overlap",              GVG_MEMCHECK_ERROR_KIND_OVERLAP },
+    { "InvalidMemPool",       GVG_MEMCHECK_ERROR_KIND_INVALID_MEM_POOL },
+    { "UninitCondition",      GVG_MEMCHECK_ERROR_KIND_UNINIT_CONDITION },
+    { "UninitValue",          GVG_MEMCHECK_ERROR_KIND_UNINIT_VALUE },
+    { "SyscallParam",         GVG_MEMCHECK_ERROR_KIND_SYSCALL_PARAM },
+    { "ClientCheck",          GVG_MEMCHECK_ERROR_KIND_CLIENT_CHECK },
+    { "Leak_DefinitelyLost",  GVG_MEMCHECK_ERROR_KIND_LEAK_DEFINITELY_LOST },
+    { "Leak_IndirectlyLost",  GVG_MEMCHECK_ERROR_KIND_LEAK_INDIRECTLY_LOST },
+    { "Leak_PossiblyLost",    GVG_MEMCHECK_ERROR_KIND_LEAK_POSSIBLY_LOST },
+    { "Leak_StillReachable",  GVG_MEMCHECK_ERROR_KIND_LEAK_STILL_REACHABLE },
+  };
+  guint i;
+  
+  for (i = 0; i < G_N_ELEMENTS (kinds); i++) {
+    if (STREQ (kinds[i].name, str)) {
+      return kinds[i].kind;
+    }
+  }
+  
+  g_warning ("Unknown kind \"%s\"", str);
+  return GVG_MEMCHECK_ERROR_KIND_NONE;
+}
+
 static guint64
 str_to_uint64 (const gchar *str)
 {
@@ -319,7 +354,9 @@ gvg_memcheck_parser_element_end (GvgXmlParser  *parser,
     gtk_tree_store_set (self->priv->store, &self->priv->root_parent_iter,
                         GVG_MEMCHECK_STORE_COLUMN_LABEL, content, -1);
   } else if (STREQ (path, "/valgrindoutput/error/kind")) {
-    /* TODO: parse kind */
+    gtk_tree_store_set (self->priv->store, &self->priv->root_parent_iter,
+                        GVG_MEMCHECK_STORE_COLUMN_KIND, parse_kind (content),
+                        -1);
   } else if (STREQ (path, "/valgrindoutput/error/auxwhat")) {
     gtk_tree_store_append (self->priv->store, &self->priv->parent_iter,
                            &self->priv->parent_iter);
