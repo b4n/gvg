@@ -267,7 +267,7 @@ parse_kind (const gchar *str)
   }
   
   g_warning ("Unknown kind \"%s\"", str);
-  return GVG_MEMCHECK_ERROR_KIND_NONE;
+  return GVG_MEMCHECK_ERROR_KIND_ANY;
 }
 
 static guint64
