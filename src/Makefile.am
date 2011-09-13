@@ -8,6 +8,7 @@ sources         = gvg-plugin.c \
                   gvg-memcheck-options.c \
                   gvg-memcheck-store.c \
                   gvg-options.c \
+                  gvg-ui.c \
                   gvg-xml-parser.c \
                   $(null)
 headers         = gvg-plugin.h \
@@ -18,6 +19,7 @@ headers         = gvg-plugin.h \
                   gvg-memcheck-options.h \
                   gvg-memcheck-store.h \
                   gvg-options.h \
+                  gvg-ui.h \
                   gvg-xml-parser.h \
                   $(null)
 autogen_sources = gvg-enum-types.c
