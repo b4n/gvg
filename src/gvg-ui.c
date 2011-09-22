@@ -351,6 +351,32 @@ gvg_ui_view_row_activated (GtkTreeView       *view,
 }
 
 static void
+gvg_ui_view_label_column_set_data (GtkCellLayout   *cell_layout,
+                                   GtkCellRenderer *cell,
+                                   GtkTreeModel    *model,
+                                   GtkTreeIter     *iter,
+                                   gpointer         data)
+{
+  GvgUI      *self = data;
+  GvgRowType  type;
+  gchar      *label;
+  PangoStyle  style;
+  
+  gtk_tree_model_get (model, iter,
+                      GVG_MEMCHECK_STORE_COLUMN_TYPE, &type,
+                      GVG_MEMCHECK_STORE_COLUMN_LABEL, &label,
+                      -1);
+  switch (type) {
+    case GVG_ROW_TYPE_OTHER:
+    case GVG_ROW_TYPE_STATUS: style = PANGO_STYLE_ITALIC; break;
+    default:                  style = PANGO_STYLE_NORMAL; break;
+  }
+  
+  g_object_set (cell, "text", label, "style", style, NULL);
+  g_free (label);
+}
+
+static void
 gvg_ui_view_ip_column_set_data (GtkCellLayout   *cell_layout,
                                 GtkCellRenderer *cell,
                                 GtkTreeModel    *model,
@@ -479,9 +505,11 @@ gvg_ui_init (GvgUI *self)
                     G_CALLBACK (gvg_ui_view_row_activated), self);
   /* label column */
   cell = gtk_cell_renderer_text_new ();
-  col = gtk_tree_view_column_new_with_attributes ("Error", cell,
-                                                  "text", GVG_MEMCHECK_STORE_COLUMN_LABEL,
-                                                  NULL);
+  col = g_object_new (GTK_TYPE_TREE_VIEW_COLUMN, "title", _("Error"), NULL);
+  gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (col), cell, TRUE);
+  gtk_cell_layout_set_cell_data_func (GTK_CELL_LAYOUT (col), cell,
+                                      gvg_ui_view_label_column_set_data,
+                                      self, NULL);
   gtk_tree_view_append_column (GTK_TREE_VIEW (self->priv->view), col);
   /* frame IP column */
   cell = g_object_new (GTK_TYPE_CELL_RENDERER_TEXT, /*"font", "monospace",*/ NULL);
