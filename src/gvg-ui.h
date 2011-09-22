@@ -55,7 +55,7 @@ struct _GvgUIClass
 
 
 GType             gvg_ui_get_type     (void) G_GNUC_CONST;
-GtkWidget*        gvg_ui_new          (GvgMemcheckStore  *model);
+GtkWidget        *gvg_ui_new          (GvgMemcheckStore  *model);
 GvgMemcheckStore *gvg_ui_get_model    (GvgUI *self);
 void              gvg_ui_set_model    (GvgUI             *self,
                                        GvgMemcheckStore  *model);
