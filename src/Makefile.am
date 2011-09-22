@@ -3,6 +3,7 @@ null =
 
 sources         = gvg-plugin.c \
                   gvg.c \
+                  gvg-entry.c \
                   gvg-memcheck.c \
                   gvg-memcheck-parser.c \
                   gvg-memcheck-options.c \
@@ -14,6 +15,7 @@ sources         = gvg-plugin.c \
 headers         = gvg-plugin.h \
                   gvg-args-builder.h \
                   gvg.h \
+                  gvg-entry.h \
                   gvg-memcheck.h \
                   gvg-memcheck-parser.h \
                   gvg-memcheck-options.h \

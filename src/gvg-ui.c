@@ -27,6 +27,7 @@
 
 #include "gvg-memcheck-parser.h"
 #include "gvg-memcheck-store.h"
+#include "gvg-entry.h"
 #include "gvg-enum-types.h"
 
 
@@ -450,7 +451,7 @@ gvg_ui_init (GvgUI *self)
   gtk_box_pack_start (GTK_BOX (hbox), self->priv->kind_combo, FALSE, TRUE, 0);
   
   /* filter entry */
-  self->priv->filter_entry = gtk_entry_new ();
+  self->priv->filter_entry = gvg_entry_new (_("Filter"));
   gtk_widget_set_tooltip_text (self->priv->filter_entry,
                                _("A text the error should contain"));
   g_signal_connect (self->priv->filter_entry, "notify::text",
