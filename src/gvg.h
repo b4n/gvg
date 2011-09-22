@@ -40,6 +40,14 @@ G_BEGIN_DECLS
 #define GVG_GET_CLASS(obj)      (G_TYPE_INSTANCE_GET_CLASS ((obj),  GVG_TYPE_GVG, GvgClass))
 
 
+typedef enum
+{
+  GVG_ROW_TYPE_OTHER,
+  GVG_ROW_TYPE_ERROR,
+  GVG_ROW_TYPE_FRAME,
+  GVG_ROW_TYPE_STATUS
+} GvgRowType;
+
 typedef struct _Gvg         Gvg;
 typedef struct _GvgClass    GvgClass;
 typedef struct _GvgPrivate  GvgPrivate;

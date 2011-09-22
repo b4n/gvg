@@ -25,6 +25,7 @@
 #include <glib-object.h>
 #include <string.h>
 
+#include "gvg.h"
 #include "gvg-xml-parser.h"
 #include "gvg-memcheck-store.h"
 
@@ -202,6 +203,8 @@ gvg_memcheck_parser_element_start (GvgXmlParser *parser,
   
   if        (STREQ (path, "/valgrindoutput/error")) {
     gtk_tree_store_append (self->priv->store, &self->priv->parent_iter, NULL);
+    gtk_tree_store_set (self->priv->store, &self->priv->parent_iter,
+                        GVG_MEMCHECK_STORE_COLUMN_TYPE, GVG_ROW_TYPE_ERROR, -1);
     self->priv->root_parent_iter = self->priv->parent_iter;
   } else if (STREQ (path, "/valgrindoutput/error/stack")) {
     self->priv->stack_len = 0;
@@ -312,13 +315,26 @@ gvg_memcheck_parser_element_end (GvgXmlParser  *parser,
   if        (STREQ (path, "/valgrindoutput")) {
     gtk_tree_store_append (self->priv->store, &self->priv->parent_iter, NULL);
     gtk_tree_store_set (self->priv->store, &self->priv->parent_iter,
+                        GVG_MEMCHECK_STORE_COLUMN_TYPE, GVG_ROW_TYPE_OTHER,
                         GVG_MEMCHECK_STORE_COLUMN_LABEL, "== END ==", -1);
   } else if (STREQ (path, "/valgrindoutput/tool")) {
     g_assert (STREQ (content, "memcheck"));
-  } else if (STREQ (path, "/valgrindoutput/status")) {
+  } else if (STREQ (path, "/valgrindoutput/status/state")) {
+    const gchar *label;
+    
+    if        (STREQ (content, "RUNNING")) {
+      label = "Program started";
+    } else if (STREQ (content, "FINISHED")) {
+      label = "Program terminated";
+    } else {
+      g_warning ("unknown Valgrind status \"%s\"", content);
+      label = content;
+    }
+    
     gtk_tree_store_append (self->priv->store, &self->priv->parent_iter, NULL);
     gtk_tree_store_set (self->priv->store, &self->priv->parent_iter,
-                        GVG_MEMCHECK_STORE_COLUMN_LABEL, "STATUS", -1);
+                        GVG_MEMCHECK_STORE_COLUMN_TYPE, GVG_ROW_TYPE_STATUS,
+                        GVG_MEMCHECK_STORE_COLUMN_LABEL, label, -1);
   } else if (STREQ (path, "/valgrindoutput/errorcounts")) {
     gtk_tree_store_append (self->priv->store, &self->priv->parent_iter, NULL);
     gtk_tree_store_set (self->priv->store, &self->priv->parent_iter,
@@ -330,6 +346,7 @@ gvg_memcheck_parser_element_end (GvgXmlParser  *parser,
     text = get_frame_display (&self->priv->frame, self->priv->stack_len);
     gtk_tree_store_append (self->priv->store, &iter, &self->priv->parent_iter);
     gtk_tree_store_set (self->priv->store, &iter,
+                        GVG_MEMCHECK_STORE_COLUMN_TYPE, GVG_ROW_TYPE_FRAME,
                         GVG_MEMCHECK_STORE_COLUMN_LABEL, text,
                         GVG_MEMCHECK_STORE_COLUMN_IP, self->priv->frame.ip,
                         GVG_MEMCHECK_STORE_COLUMN_DIR, self->priv->frame.dir,
@@ -361,6 +378,7 @@ gvg_memcheck_parser_element_end (GvgXmlParser  *parser,
     gtk_tree_store_append (self->priv->store, &self->priv->parent_iter,
                            &self->priv->parent_iter);
     gtk_tree_store_set (self->priv->store, &self->priv->parent_iter,
+                        GVG_MEMCHECK_STORE_COLUMN_TYPE, GVG_ROW_TYPE_ERROR,
                         GVG_MEMCHECK_STORE_COLUMN_LABEL, content, -1);
   }
 }
