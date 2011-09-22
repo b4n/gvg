@@ -436,33 +436,30 @@ gvg_ui_init (GvgUI *self)
   self->priv->filter = NULL;
   
   /* Top bar */
-  hbox = gtk_hbox_new (FALSE, 6);
+  hbox = gtk_hbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (self), hbox, FALSE, TRUE, 0);
   
   /* kind filter */
-  hbox2 = gtk_hbox_new (FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (hbox), hbox2, FALSE, TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (hbox2), gtk_label_new (_("Kind: ")),
-                      FALSE, TRUE, 0);
+  /* TODO: make unsensitive types that don't exist actually */
   self->priv->kind_store = gvg_ui_create_kind_store ();
   self->priv->kind_combo = gvg_ui_create_kind_combo (self->priv->kind_store);
+  gtk_widget_set_tooltip_text (self->priv->kind_combo,
+                               _("The error kind to show"));
   g_signal_connect (self->priv->kind_combo, "changed",
                     G_CALLBACK (gvg_ui_kind_combo_changed_hanlder), self);
-  gtk_box_pack_start (GTK_BOX (hbox2), self->priv->kind_combo, FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox), self->priv->kind_combo, FALSE, TRUE, 0);
   
   /* filter entry */
-  hbox2 = gtk_hbox_new (FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (hbox), hbox2, TRUE, TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (hbox2), gtk_label_new (_("Filter: ")),
-                      FALSE, TRUE, 0);
   self->priv->filter_entry = gtk_entry_new ();
+  gtk_widget_set_tooltip_text (self->priv->filter_entry,
+                               _("A text the error should contain"));
   g_signal_connect (self->priv->filter_entry, "notify::text",
                     G_CALLBACK (gvg_ui_filter_entry_notify_text_hanlder), self);
-  gtk_box_pack_start (GTK_BOX (hbox2), self->priv->filter_entry, TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox), self->priv->filter_entry, TRUE, TRUE, 0);
   self->priv->filter_invert = gtk_check_button_new_with_label (_("Reverse match"));
   g_signal_connect (self->priv->filter_invert, "toggled",
                     G_CALLBACK (gvg_ui_filter_invert_toggled_hanlder), self);
-  gtk_box_pack_start (GTK_BOX (hbox2), self->priv->filter_invert, FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox), self->priv->filter_invert, FALSE, TRUE, 0);
   
   
   /* The view */
