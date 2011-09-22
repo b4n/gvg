@@ -556,8 +556,10 @@ gvg_ui_set_model (GvgUI            *self,
   g_return_if_fail (GVG_IS_MEMCHECK_STORE (model));
   
   self->priv->store = model;
-  g_signal_connect (self->priv->store, "row-inserted",
-                    G_CALLBACK (force_refresh_entry), self);
+  /* WTF? when I connect the signal below (row-inserted), I get the first child
+   * duplicated as the last child... really, WTF? */
+  /*g_signal_connect (self->priv->store, "row-inserted",
+                    G_CALLBACK (force_refresh_entry), self);*/
   g_signal_connect (self->priv->store, "row-changed",
                     G_CALLBACK (force_refresh_entry), self);
   self->priv->filter = gtk_tree_model_filter_new (GTK_TREE_MODEL (self->priv->store),
