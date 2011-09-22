@@ -22,6 +22,7 @@
 #include "gvg-memcheck-parser.h"
 
 #include <glib.h>
+#include <glib/gi18n.h>
 #include <glib-object.h>
 #include <string.h>
 
@@ -225,14 +226,14 @@ get_frame_display (GvgMemcheckFrame  *frame,
 {
   GString *str = g_string_new (NULL);
   
-  g_string_append (str, nth < 2 ? "at" : "by");
+  g_string_append (str, nth < 2 ? _("at") : _("by"));
   /*g_string_append_printf (str, " %#x: ", frame->ip);*/
   g_string_append (str, " ");
   g_string_append (str, frame->func ? frame->func : "???");
   if (frame->file) {
     g_string_append_printf (str, " (%s:%u)", frame->file, frame->line);
   } else {
-    g_string_append_printf (str, " (in %s)", frame->obj);
+    g_string_append_printf (str, _(" (in %s)"), frame->obj);
   }
   
   return g_string_free (str, FALSE);
@@ -281,7 +282,7 @@ str_to_uint64 (const gchar *str)
   
   result = g_ascii_strtoull (str, &endptr, 0);
   if (*endptr != 0) {
-    g_warning ("invalid data at end of numeric value: %s", str);
+    g_warning ("Invalid data at end of numeric value: %s", str);
   }
   
   return result;
@@ -294,7 +295,7 @@ str_to_uint (const gchar *str)
   
   result = str_to_uint64 (str);
   if (result > G_MAXUINT) {
-    g_warning ("value %"G_GUINT64_FORMAT" too big for uint, truncating",
+    g_warning ("Value %"G_GUINT64_FORMAT" too big for uint, truncating",
                result);
     result = G_MAXUINT;
   }
@@ -323,11 +324,11 @@ gvg_memcheck_parser_element_end (GvgXmlParser  *parser,
     const gchar *label;
     
     if        (STREQ (content, "RUNNING")) {
-      label = "Program started";
+      label = _("Program started");
     } else if (STREQ (content, "FINISHED")) {
-      label = "Program terminated";
+      label = _("Program terminated");
     } else {
-      g_warning ("unknown Valgrind status \"%s\"", content);
+      g_warning ("Unknown Valgrind status \"%s\"", content);
       label = content;
     }
     
