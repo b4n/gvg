@@ -5,9 +5,12 @@ sources         = gvg-plugin.c \
                   gvg.c \
                   gvg-entry.c \
                   gvg-memcheck.c \
+                  gvg-memcheck-filter-bar.c \
                   gvg-memcheck-parser.c \
                   gvg-memcheck-options.c \
                   gvg-memcheck-store.c \
+                  gvg-memcheck-store-filter.c \
+                  gvg-memcheck-view.c \
                   gvg-options.c \
                   gvg-ui.c \
                   gvg-xml-parser.c \
@@ -17,9 +20,12 @@ headers         = gvg-plugin.h \
                   gvg.h \
                   gvg-entry.h \
                   gvg-memcheck.h \
+                  gvg-memcheck-filter-bar.h \
                   gvg-memcheck-parser.h \
                   gvg-memcheck-options.h \
                   gvg-memcheck-store.h \
+                  gvg-memcheck-store-filter.h \
+                  gvg-memcheck-view.h \
                   gvg-options.h \
                   gvg-ui.h \
                   gvg-xml-parser.h \
