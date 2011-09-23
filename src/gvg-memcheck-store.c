@@ -43,13 +43,14 @@ gvg_memcheck_store_init (GvgMemcheckStore *self)
 {
   GType column_types[GVG_MEMCHECK_STORE_N_COLUMNS] = { 0 };
   
-  column_types[GVG_MEMCHECK_STORE_COLUMN_TYPE]  = GVG_TYPE_ROW_TYPE;
-  column_types[GVG_MEMCHECK_STORE_COLUMN_LABEL] = G_TYPE_STRING;
-  column_types[GVG_MEMCHECK_STORE_COLUMN_IP]    = G_TYPE_UINT64;
-  column_types[GVG_MEMCHECK_STORE_COLUMN_DIR]   = G_TYPE_STRING;
-  column_types[GVG_MEMCHECK_STORE_COLUMN_FILE]  = G_TYPE_STRING;
-  column_types[GVG_MEMCHECK_STORE_COLUMN_LINE]  = G_TYPE_UINT;
-  column_types[GVG_MEMCHECK_STORE_COLUMN_KIND]  = GVG_TYPE_MEMCHECK_ERROR_KIND;
+  column_types[GVG_MEMCHECK_STORE_COLUMN_TYPE]    = GVG_TYPE_ROW_TYPE;
+  column_types[GVG_MEMCHECK_STORE_COLUMN_LABEL]   = G_TYPE_STRING;
+  column_types[GVG_MEMCHECK_STORE_COLUMN_IP]      = G_TYPE_UINT64;
+  column_types[GVG_MEMCHECK_STORE_COLUMN_OBJECT]  = G_TYPE_STRING;
+  column_types[GVG_MEMCHECK_STORE_COLUMN_DIR]     = G_TYPE_STRING;
+  column_types[GVG_MEMCHECK_STORE_COLUMN_FILE]    = G_TYPE_STRING;
+  column_types[GVG_MEMCHECK_STORE_COLUMN_LINE]    = G_TYPE_UINT;
+  column_types[GVG_MEMCHECK_STORE_COLUMN_KIND]    = GVG_TYPE_MEMCHECK_ERROR_KIND;
   
   gtk_tree_store_set_column_types (GTK_TREE_STORE (self),
                                    G_N_ELEMENTS (column_types), column_types);
