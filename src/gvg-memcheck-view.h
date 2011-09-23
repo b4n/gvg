@@ -47,6 +47,13 @@ struct _GvgMemcheckView
 struct _GvgMemcheckViewClass
 {
   GtkTreeViewClass  parent_class;
+  
+  void            (*file_activated)     (GvgMemcheckView *view,
+                                         const gchar     *dir,
+                                         const gchar     *file,
+                                         guint            line);
+  void            (*object_activated)   (GvgMemcheckView *view,
+                                         const gchar     *object);
 };
 
 

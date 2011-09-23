@@ -30,14 +30,19 @@ headers         = gvg-plugin.h \
                   gvg-ui.h \
                   gvg-xml-parser.h \
                   $(null)
-autogen_sources = gvg-enum-types.c
-autogen_headers = gvg-enum-types.h
+autogen_sources = gvg-enum-types.c \
+                  gvg-cclosure-marshal.c \
+                  $(null)
+autogen_headers = gvg-enum-types.h \
+                  gvg-cclosure-marshal.h \
+                  $(null)
 
 CLEANFILES      = $(autogen_sources) \
                   $(autogen_headers)
 
 EXTRA_DIST      = gvg-enum-types.c.tpl \
                   gvg-enum-types.h.tpl \
+                  gvg-cclosure-marshal.list \
                   $(null)
 
 # FIXME:
@@ -67,6 +72,10 @@ gvg-enum-types.c: $(srcdir)/gvg-enum-types.c.tpl gvg-enum-types.h $(headers) Mak
 gvg-enum-types.h: $(srcdir)/gvg-enum-types.h.tpl $(headers) Makefile
 	$(AM_V_GEN)$(GLIB_MKENUMS) --template $< $(headers:%=$(srcdir)/%) > $@
 
+gvg-cclosure-marshal.c: $(srcdir)/gvg-cclosure-marshal.list gvg-cclosure-marshal.h Makefile
+	$(AM_V_GEN)$(GLIB_GENMARSHAL) --prefix=gvg_cclosure_marshal --body $< > $@
+gvg-cclosure-marshal.h: $(srcdir)/gvg-cclosure-marshal.list Makefile
+	$(AM_V_GEN)$(GLIB_GENMARSHAL) --prefix=gvg_cclosure_marshal --header $< > $@
 
 check-local:
 	@echo "CHECK"; \

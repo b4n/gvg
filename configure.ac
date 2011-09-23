@@ -17,6 +17,7 @@ LT_INIT
 AC_PROG_CC
 
 GVG_PATH_PROG([GLIB_MKENUMS], [glib-mkenums])
+GVG_PATH_PROG([GLIB_GENMARSHAL], [glib-genmarshal])
 
 # Checks for libraries.
 PKG_CHECK_MODULES([GVG], [glib-2.0 >= 2.16

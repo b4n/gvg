@@ -145,6 +145,24 @@ filter_bar_mirror_property (GObject     *object,
 }
 
 static void
+gvg_ui_view_file_activated (GvgMemcheckView  *view,
+                            const gchar      *dir,
+                            const gchar      *file,
+                            guint             line,
+                            GvgUI            *self)
+{
+  g_debug ("open file %s/%s:%u", dir, file, line);
+}
+
+static void
+gvg_ui_view_object_activated (GvgMemcheckView  *view,
+                              const gchar      *obj,
+                              GvgUI            *self)
+{
+  g_debug ("open object %s", obj);
+}
+
+static void
 gvg_ui_init (GvgUI *self)
 {
   GtkWidget *hbox;
@@ -179,6 +197,10 @@ gvg_ui_init (GvgUI *self)
   self->priv->view = g_object_new (GVG_TYPE_MEMCHECK_VIEW,
                                    "headers-visible", FALSE,
                                    NULL);
+  g_signal_connect (self->priv->view, "file-activated",
+                    G_CALLBACK (gvg_ui_view_file_activated), self);
+  g_signal_connect (self->priv->view, "object-activated",
+                    G_CALLBACK (gvg_ui_view_object_activated), self);
   gtk_container_add (GTK_CONTAINER (scroll), self->priv->view);
   
   gtk_widget_show_all (hbox);

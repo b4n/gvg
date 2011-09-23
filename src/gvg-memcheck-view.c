@@ -27,11 +27,23 @@
 #include "gvg.h"
 #include "gvg-memcheck-parser.h"
 #include "gvg-memcheck-store.h"
+#include "gvg-cclosure-marshal.h"
 
 
 G_DEFINE_TYPE (GvgMemcheckView,
                gvg_memcheck_view,
                GTK_TYPE_TREE_VIEW)
+
+
+enum
+{
+  SIGNAL_FILE_ACTIVATED,
+  SIGNAL_OBJECT_ACTIVATED,
+  N_SIGNALS
+};
+
+
+static guint signals[N_SIGNALS] = { 0 };
 
 
 static gboolean
@@ -56,25 +68,28 @@ gvg_memcheck_view_row_activated (GtkTreeView       *view,
   GtkTreeIter       iter;
   
   if (gtk_tree_model_get_iter (model, &iter, path)) {
+    gchar  *obj;
     gchar  *dir;
     gchar  *file;
     guint   line;
     
     gtk_tree_model_get (model, &iter,
+                        GVG_MEMCHECK_STORE_COLUMN_OBJECT, &obj,
                         GVG_MEMCHECK_STORE_COLUMN_DIR, &dir,
                         GVG_MEMCHECK_STORE_COLUMN_FILE, &file,
                         GVG_MEMCHECK_STORE_COLUMN_LINE, &line,
                         -1);
-    if (! file) {
-      if (gtk_tree_model_iter_has_child (model, &iter)) {
-        /* toggle row expansion if it doesn't has a file */
-        tree_view_toggle_row_expansion (view, path, FALSE);
-      } else {
-        g_debug ("cannot open nothing!");
-      }
+    if (file) {
+      g_signal_emit (self, signals[SIGNAL_FILE_ACTIVATED], 0, dir, file, line);
+    } else if (obj) {
+      g_signal_emit (self, signals[SIGNAL_OBJECT_ACTIVATED], 0, obj);
+    } else if (gtk_tree_model_iter_has_child (model, &iter)) {
+      /* toggle row expansion if it doesn't has a file or object */
+      tree_view_toggle_row_expansion (view, path, FALSE);
     } else {
-      g_debug ("open file %s/%s:%u", dir, file, line);
+      g_debug ("cannot open nothing!");
     }
+    g_free (obj);
     g_free (dir);
     g_free (file);
   }
@@ -86,6 +101,29 @@ gvg_memcheck_view_class_init (GvgMemcheckViewClass *klass)
   GtkTreeViewClass *tree_view_class = GTK_TREE_VIEW_CLASS (klass);
   
   tree_view_class->row_activated = gvg_memcheck_view_row_activated;
+  
+  signals[SIGNAL_FILE_ACTIVATED] = g_signal_new ("file-activated",
+                                                 GVG_TYPE_MEMCHECK_VIEW,
+                                                 G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
+                                                 G_STRUCT_OFFSET (GvgMemcheckViewClass,
+                                                                  file_activated),
+                                                 NULL, NULL,
+                                                 gvg_cclosure_marshal_VOID__STRING_STRING_UINT,
+                                                 G_TYPE_NONE,
+                                                 3,
+                                                 G_TYPE_STRING,
+                                                 G_TYPE_STRING,
+                                                 G_TYPE_UINT);
+  signals[SIGNAL_OBJECT_ACTIVATED] = g_signal_new ("object-activated",
+                                                   GVG_TYPE_MEMCHECK_VIEW,
+                                                   G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
+                                                   G_STRUCT_OFFSET (GvgMemcheckViewClass,
+                                                                    object_activated),
+                                                   NULL, NULL,
+                                                   gvg_cclosure_marshal_VOID__STRING,
+                                                   G_TYPE_NONE,
+                                                   1,
+                                                   G_TYPE_STRING);
 }
 
 static void
