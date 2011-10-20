@@ -212,7 +212,7 @@ gvg_options_get_property (GObject    *object,
   }
 }
 
-void
+static void
 gvg_options_set_property (GObject      *object,
                           guint         prop_id,
                           const GValue *value,
