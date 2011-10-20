@@ -43,6 +43,8 @@ struct _GvgMemcheckFilterBarPrivate
   GtkWidget        *kind_combo;
   GtkWidget        *filter_entry;
   GtkWidget        *filter_invert;
+  
+  gboolean          invert;
 };
 
 
@@ -223,10 +225,32 @@ gvg_memcheck_filter_bar_filter_entry_notify_text_hanlder (GObject              *
 }
 
 static void
-gvg_memcheck_filter_bar_filter_invert_toggled_hanlder (GtkToggleButton       *button,
+gvg_memcheck_filter_bar_filter_invert_toggled_hanlder (GtkCheckMenuItem      *item,
                                                        GvgMemcheckFilterBar  *self)
 {
-  g_object_notify (G_OBJECT (self), "invert");
+  gvg_memcheck_filter_bar_set_invert (self,
+                                      gtk_check_menu_item_get_active (item));
+}
+
+static void
+gvg_memcheck_filter_bar_filter_entry_populate_popup_hanlder (GtkEntry              *entry,
+                                                             GtkMenu               *menu,
+                                                             GvgMemcheckFilterBar  *self)
+{
+  GtkWidget *item;
+  
+  item = gtk_separator_menu_item_new ();
+  gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
+  gtk_widget_show (item);
+  
+  item = gtk_check_menu_item_new_with_mnemonic (_("_Reverse match"));
+  gtk_check_menu_item_set_active (GTK_CHECK_MENU_ITEM (item),
+                                  self->priv->invert);
+  g_signal_connect (item, "toggled",
+                    G_CALLBACK (gvg_memcheck_filter_bar_filter_invert_toggled_hanlder),
+                    self);
+  gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
+  gtk_widget_show (item);
 }
 
 static void
@@ -235,6 +259,8 @@ gvg_memcheck_filter_bar_init (GvgMemcheckFilterBar *self)
   self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
                                             GVG_TYPE_MEMCHECK_FILTER_BAR,
                                             GvgMemcheckFilterBarPrivate);
+  
+  self->priv->invert = FALSE;
   
   /* kind filter */
   /* TODO: make unsensitive types that don't exist actually in the filtered
@@ -256,17 +282,13 @@ gvg_memcheck_filter_bar_init (GvgMemcheckFilterBar *self)
                     G_CALLBACK (gvg_memcheck_filter_bar_filter_entry_notify_text_hanlder),
                     self);
   gtk_box_pack_start (GTK_BOX (self), self->priv->filter_entry, TRUE, TRUE, 0);
-  /* reverse match */
-  self->priv->filter_invert = gtk_check_button_new_with_label (_("Reverse match"));
-  g_signal_connect (self->priv->filter_invert, "toggled",
-                    G_CALLBACK (gvg_memcheck_filter_bar_filter_invert_toggled_hanlder),
+  /* reverse match is in popup */
+  g_signal_connect (self->priv->filter_entry, "populate-popup",
+                    G_CALLBACK (gvg_memcheck_filter_bar_filter_entry_populate_popup_hanlder),
                     self);
-  gtk_box_pack_start (GTK_BOX (self), self->priv->filter_invert,
-                      FALSE, TRUE, 0);
   
   gtk_widget_show (self->priv->kind_combo);
   gtk_widget_show (self->priv->filter_entry);
-  gtk_widget_show (self->priv->filter_invert);
 }
 
 
@@ -329,7 +351,7 @@ gvg_memcheck_filter_bar_get_invert (GvgMemcheckFilterBar *self)
 {
   g_return_val_if_fail (GVG_IS_MEMCHECK_FILTER_BAR (self), FALSE);
   
-  return gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (self->priv->filter_invert));
+  return self->priv->invert;
 }
 
 void
@@ -338,7 +360,9 @@ gvg_memcheck_filter_bar_set_invert (GvgMemcheckFilterBar *self,
 {
   g_return_if_fail (GVG_IS_MEMCHECK_FILTER_BAR (self));
   
-  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->priv->filter_invert),
-                                invert);
-  /* no need to notify since we do so in a changed handler anyway */
+  invert = (invert != FALSE);
+  if (invert != self->priv->invert) {
+    self->priv->invert = invert;
+    g_object_notify (G_OBJECT (self), "invert");
+  }
 }
